@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rainbow Ants</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the 900×600 arena is the hero. Beside it (below it on narrower screens) a bench
+   card holds the run controls, the experiment set-up and a tally of ants that have left. */
+:root {
+  --bench: #e2e7e4;      /* page ground: a cool lab-bench grey */
+  --card: #f6f8f7;       /* control card */
+  --ink: #161f1a;        /* text, primary button, slider fill */
+  --ink-2: #55615a;      /* secondary text */
+  --line: #c6d0ca;       /* hairlines and outlines */
+  --on-ink: #f6f8f7;     /* text on the primary button */
+  --focus: #2459d6;
+  --shadow: rgba(22, 31, 26, 0.18);
+  --paper: #f3f1ea;      /* the arena's white card, shown before the first frame */
+  --red: #d81e3c;        /* the four dyes look the same in both themes */
+  --yellow: #f5c400;
+  --blue: #1b62d6;
+  --green: #169b45;
+  --display: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bench: #0f1311;
+    --card: #171d1a;
+    --ink: #e4eae6;
+    --ink-2: #96a29b;
+    --line: #2b3530;
+    --on-ink: #0f1311;
+    --focus: #7ea4ff;
+    --shadow: rgba(0, 0, 0, 0.55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bench: #0f1311;
+  --card: #171d1a;
+  --ink: #e4eae6;
+  --ink-2: #96a29b;
+  --line: #2b3530;
+  --on-ink: #0f1311;
+  --focus: #7ea4ff;
+  --shadow: rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bench);
+  color: var(--ink);
+  font: 400 15px/1.5 var(--display);
+  padding-inline: 16px;
+  padding-block: 28px 40px;
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.app { max-width: 900px; margin-inline: auto; display: grid; gap: 20px; }
+@media (min-width: 1250px) { .app { max-width: 1214px; } }
+
+.masthead { display: grid; gap: 8px; }
+.masthead h1 {
+  margin: 0;
+  font-size: clamp(32px, 4.4vw, 46px);
+  font-weight: 780;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.masthead p { margin: 0; max-width: 62ch; font-size: 16px; color: var(--ink-2); }
+
+.layout { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1250px) { .layout { grid-template-columns: 900px minmax(0, 1fr); } }
+
+.stage { margin: 0; min-width: 0; }
+#arena {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow: 0 1px 2px var(--shadow), 0 14px 34px -14px var(--shadow);
+}
+#arena.editable { touch-action: none; }
+
+/* ── control card ── */
+.panel {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+  min-width: 0;
+  padding: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+@media (min-width: 720px) and (max-width: 1249.98px) {
+  .panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "run speed"
+      "status status"
+      "drops ants"
+      "fullness hopping"
+      "tally tally";
+    column-gap: 32px;
+  }
+  .run { grid-area: run; }
+  .speed-field { grid-area: speed; }
+  .status { grid-area: status; }
+  .drops-field { grid-area: drops; }
+  .ants-field { grid-area: ants; }
+  .fullness-field { grid-area: fullness; }
+  .hopping-field { grid-area: hopping; }
+  .tally { grid-area: tally; }
+}
+
+.run { display: flex; gap: 10px; align-items: center; }
+.btn {
+  font: 650 15px/1 var(--display);
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--ink-2); }
+.btn-go { flex: 1 1 auto; background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.btn-go:hover:not(:disabled) { border-color: var(--ink); opacity: 0.88; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font: 500 11.5px/1 var(--mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.5; }
+.pill[data-state="running"] { color: var(--ink); border-color: var(--ink); }
+.pill[data-state="running"]::before { opacity: 1; animation: blink 1.2s ease-in-out infinite; }
+.pill[data-state="done"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.pill[data-state="done"]::before { opacity: 1; }
+@keyframes blink { 50% { opacity: 0.2; } }
+
+.readouts { display: flex; gap: 18px; margin: 0; }
+.readouts div { display: grid; gap: 3px; }
+.readouts dt {
+  font: 500 10.5px/1.2 var(--mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.readouts dd { margin: 0; font: 500 17px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+
+.field { display: grid; gap: 8px; min-width: 0; }
+.field-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.field-head label, .field-head .label { font-weight: 650; }
+.field-head output { font: 500 14px/1 var(--mono); font-variant-numeric: tabular-nums; }
+.hint { margin: 0; font-size: 13px; line-height: 1.4; color: var(--ink-2); }
+
+input[type="range"] {
+  --pct: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--ink) var(--pct), var(--line) var(--pct));
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 3px solid var(--card);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--line); }
+input[type="range"]::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--ink); }
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 3px solid var(--card);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+input[type="range"]:disabled { opacity: 0.45; cursor: not-allowed; }
+input[type="range"]:focus-visible { outline-offset: 4px; border-radius: 4px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  --dye: var(--red);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: 560 14px/1.2 var(--display);
+  cursor: pointer;
+}
+.chip[data-dye="1"] { --dye: var(--yellow); }
+.chip[data-dye="2"] { --dye: var(--blue); }
+.chip[data-dye="3"] { --dye: var(--green); }
+.chip .dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--dye);
+  box-shadow: inset -2px -3px 4px rgba(0, 0, 0, 0.28), inset 2px 2px 2px rgba(255, 255, 255, 0.55);
+  opacity: 0.3;
+  transition: opacity 0.15s;
+}
+.chip[aria-pressed="true"] { border-color: var(--dye); background: color-mix(in srgb, var(--dye) 13%, transparent); }
+.chip[aria-pressed="true"] .dot { opacity: 1; }
+.chip .level { font: 500 12px/1 var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.chip .level:empty { display: none; }
+.chip:disabled { cursor: not-allowed; }
+.chip:disabled[aria-pressed="false"] { opacity: 0.5; }
+
+.speed { display: inline-flex; justify-self: start; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
+.speed label { position: relative; }
+.speed input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.speed span { display: block; padding: 8px 11px; border-radius: 6px; font: 500 13px/1 var(--mono); color: var(--ink-2); }
+.speed input:checked + span { background: var(--ink); color: var(--on-ink); }
+.speed input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+.tally { display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--line); }
+.tally h2 {
+  margin: 0;
+  font: 500 11px/1.2 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.tally p { margin: 0; font-size: 14px; color: var(--ink-2); }
+.swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.swatch {
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16), inset -2px -3px 4px rgba(0, 0, 0, 0.2), inset 2px 2px 2px rgba(255, 255, 255, 0.4);
+  animation: pop 0.25s ease-out;
+}
+@keyframes pop { from { transform: scale(0); } }
+
+.credit { margin: 0; max-width: 72ch; font-size: 13px; color: var(--ink-2); }
+.credit a { color: inherit; text-underline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pill[data-state="running"]::before, .swatch { animation: none; }
+}
+</style>
+</head>
+<body>
+<main class="app">
+  <header class="masthead">
+    <h1>Rainbow Ants</h1>
+    <p>Ants have see-through abdomens, so whatever they drink shows. Put out drops of coloured sugar water, choose how many ants come in, then press Go.</p>
+  </header>
+
+  <div class="layout">
+    <figure class="stage">
+      <canvas id="arena" width="900" height="600" role="img" aria-label="Top-down view of the arena: drops of coloured sugar water on white card, with an entrance door at the bottom and an exit door at the top."></canvas>
+    </figure>
+
+    <aside class="panel" aria-label="Experiment controls">
+      <div class="run">
+        <button id="go" class="btn btn-go" type="button" title="Shortcut: Space">Go</button>
+        <button id="reset" class="btn" type="button">Reset</button>
+      </div>
+
+      <div class="status">
+        <span id="state" class="pill" data-state="setup">Ready</span>
+        <dl class="readouts">
+          <div><dt>In arena</dt><dd id="n-arena">0</dd></div>
+          <div><dt>Drinking</dt><dd id="n-drinking">0</dd></div>
+          <div><dt>Left</dt><dd id="n-left">0/25</dd></div>
+        </dl>
+      </div>
+
+      <div class="field drops-field" role="group" aria-labelledby="drops-label">
+        <div class="field-head"><span class="label" id="drops-label">Drops</span></div>
+        <div class="chips">
+          <button id="dye-red" type="button" class="chip" data-dye="0" aria-pressed="true"><span class="dot"></span>Red<span class="level"></span></button>
+          <button id="dye-yellow" type="button" class="chip" data-dye="1" aria-pressed="false"><span class="dot"></span>Yellow<span class="level"></span></button>
+          <button id="dye-blue" type="button" class="chip" data-dye="2" aria-pressed="false"><span class="dot"></span>Blue<span class="level"></span></button>
+          <button id="dye-green" type="button" class="chip" data-dye="3" aria-pressed="false"><span class="dot"></span>Green<span class="level"></span></button>
+        </div>
+        <p class="hint">Ants head for the nearest drop first. Drag a drop to move it.</p>
+      </div>
+
+      <div class="field ants-field">
+        <div class="field-head"><label for="ants">Ants</label><output id="ants-out" for="ants">25</output></div>
+        <input id="ants" type="range" min="1" max="200" value="25">
+        <p class="hint">They come in through the door at the bottom. More ants means bigger drops, so there's enough for all of them.</p>
+      </div>
+
+      <div class="field fullness-field">
+        <div class="field-head"><label for="fullness">Fullness</label><output id="fullness-out" for="fullness">75%</output></div>
+        <input id="fullness" type="range" min="20" max="100" step="5" value="75">
+        <p class="hint">How much each ant drinks before it leaves by the top door.</p>
+      </div>
+
+      <div class="field hopping-field">
+        <div class="field-head"><label for="hopping">Drop hopping</label><output id="hopping-out" for="hopping">50%</output></div>
+        <input id="hopping" type="range" min="0" max="100" step="5" value="50">
+        <p class="hint">Chance an ant moves on to another drop, chosen at random, part-way through. This mixes the colours.</p>
+      </div>
+
+      <div class="field speed-field">
+        <div class="field-head"><span class="label" id="speed-label">Speed</span></div>
+        <div class="speed" role="radiogroup" aria-labelledby="speed-label">
+          <label><input id="speed-half" type="radio" name="speed" value="0.5"><span>½×</span></label>
+          <label><input id="speed-1" type="radio" name="speed" value="1" checked><span>1×</span></label>
+          <label><input id="speed-2" type="radio" name="speed" value="2"><span>2×</span></label>
+          <label><input id="speed-4" type="radio" name="speed" value="4"><span>4×</span></label>
+        </div>
+      </div>
+
+      <section class="tally" aria-labelledby="tally-title">
+        <h2 id="tally-title">Ants that have left</h2>
+        <p id="tally-summary">Each ant that leaves shows up here in the colour it ended up.</p>
+        <div id="swatches" class="swatches" aria-hidden="true"></div>
+      </section>
+    </aside>
+  </div>
+
+  <p class="credit">Based on the coloured sugar water experiment (<a href="https://www.smithsonianmag.com/science-nature/these-rainbow-colored-transparent-ants-are-what-they-eat-25521112/" target="_blank" rel="noopener">Smithsonian</a>, <a href="https://imgur.com/ants-drinking-different-colored-sugar-water-8pA4wAa" target="_blank" rel="noopener">video</a>). The colours mix the way dyes do, so yellow and blue make green.</p>
+  <p id="live" class="sr-only" aria-live="polite"></p>
+</main>
+<script src="ants.js"></script>
+</body>
+</html>
