@@ -18,6 +18,7 @@
   const SPARE = 1.2;         // between them, the drops hold 20% more than all the ants can drink
   const MAX_RADIUS = [0, 110, 85, 70, 58];   // px, the biggest a drop can be for 1–4 drops
   const DRINK_RATE = 0.13;   // share of a full crop drunk per second
+  const MAX_APPETITE = 1.1;  // the greediest ants drink this much more than the Fullness setting
   const CLEARANCE = 40;      // berth walking ants give drops they aren't heading for
   const REACH = 14.6;        // thorax centre to mandible tip, in body units
 
@@ -197,7 +198,7 @@
       this.outbound = false;
       this.crop = [0, 0, 0, 0];     // how much of each dye it has drunk
       this.fill = 0;                // total, where 1 is brim full
-      this.appetite = rand(0.86, 1.1);
+      this.appetite = rand(0.86, MAX_APPETITE);
       this.front = [0, 0, 0, 0];    // colour mix shown at the waist end of the abdomen
       this.back = [0, 0, 0, 0];     // and at the tip, which catches up more slowly
       this.drop = null;
@@ -1263,7 +1264,8 @@
   const SWATCH = { min: 8, max: 17, gap: 5 };
 
   // Once a run starts, make room for every ant's swatch up front, so whatever sits
-  // below the tally doesn't creep down the page as ants leave.
+  // below the tally doesn't creep down the page as ants leave. The room only grows
+  // during a run (say if Fullness goes up), so it never jumps back.
   function reserveTally() {
     const box = ui.swatches;
     box.hidden = sim.state === 'setup';
@@ -1271,9 +1273,11 @@
       box.style.minHeight = '';
       return;
     }
-    const pitch = SWATCH.max + SWATCH.gap;
+    const biggest = SWATCH.min + (SWATCH.max - SWATCH.min) * Math.min(1, settings.fullness * MAX_APPETITE);
+    const pitch = biggest + SWATCH.gap;
     const perRow = Math.max(1, Math.floor((box.clientWidth + SWATCH.gap) / pitch));
-    box.style.minHeight = Math.ceil(sim.total / perRow) * pitch - SWATCH.gap + 'px';
+    const need = Math.ceil(sim.total / perRow) * pitch - SWATCH.gap;
+    box.style.minHeight = Math.max(need, parseFloat(box.style.minHeight) || 0) + 'px';
   }
 
   function updateReadouts() {
@@ -1326,6 +1330,7 @@
     el.title = describe(rec);
     ui.swatches.append(el);
     updateTally();
+    updateReadouts();   // so "Left" agrees with the tally straight away
   }
 
   function start() {
@@ -1379,7 +1384,10 @@
       updateReadouts();
     }
   });
-  ui.fullness.addEventListener('input', readControls);
+  ui.fullness.addEventListener('input', () => {
+    readControls();
+    reserveTally();
+  });
   ui.hopping.addEventListener('input', readControls);
   for (const r of ui.speeds) r.addEventListener('change', readControls);
   for (const chip of ui.chips) {
