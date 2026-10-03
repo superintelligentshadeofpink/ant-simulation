@@ -2,6 +2,8 @@
 
 Ants have see-through abdomens, so whatever they drink shows. Rainbow Ants is a browser simulation of the coloured sugar water experiment. Put out drops of dyed sugar water, let the ants in, and watch them fill up with colour.
 
+**[Try it in your browser](https://superintelligentshadeofpink.github.io/ant-simulation/)**
+
 ![120 ants mid-run around red, yellow, blue and green drops. Their swollen abdomens show the colours they've drunk, including mixes such as teal and purple, and the two drops nearest the entrance have shrunk to a fraction of their size.](docs/screenshot.jpg)
 
 ## Running it
