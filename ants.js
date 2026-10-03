@@ -1255,7 +1255,25 @@
     ui.state.dataset.state = s;
     ui.state.textContent = { setup: 'Ready', running: 'Running', paused: 'Paused', done: 'Finished' }[s];
     canvas.classList.toggle('editable', s === 'setup');
+    reserveTally();
     updateReadouts();
+  }
+
+  // Swatch sizes in px. The gap matches .swatches in the CSS.
+  const SWATCH = { min: 8, max: 17, gap: 5 };
+
+  // Once a run starts, make room for every ant's swatch up front, so whatever sits
+  // below the tally doesn't creep down the page as ants leave.
+  function reserveTally() {
+    const box = ui.swatches;
+    box.hidden = sim.state === 'setup';
+    if (box.hidden) {
+      box.style.minHeight = '';
+      return;
+    }
+    const pitch = SWATCH.max + SWATCH.gap;
+    const perRow = Math.max(1, Math.floor((box.clientWidth + SWATCH.gap) / pitch));
+    box.style.minHeight = Math.ceil(sim.total / perRow) * pitch - SWATCH.gap + 'px';
   }
 
   function updateReadouts() {
@@ -1304,7 +1322,7 @@
     const el = document.createElement('span');
     el.className = 'swatch';
     el.style.setProperty('--c', rec.colour);
-    el.style.setProperty('--s', (8 + 9 * rec.fill).toFixed(1) + 'px');
+    el.style.setProperty('--s', (SWATCH.min + (SWATCH.max - SWATCH.min) * rec.fill).toFixed(1) + 'px');
     el.title = describe(rec);
     ui.swatches.append(el);
     updateTally();
@@ -1447,7 +1465,10 @@
 
   readControls();
   settings.dyes = ui.chips.map((c) => c.getAttribute('aria-pressed') === 'true');
-  window.addEventListener('resize', fitCanvas);
+  window.addEventListener('resize', () => {
+    fitCanvas();
+    reserveTally();
+  });
   fitCanvas();
   reset(true);
   requestAnimationFrame(frame);

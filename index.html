@@ -8,8 +8,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: the 900×600 arena is the hero. Beside it (below it on narrower screens) a bench
-   card holds the run controls, the experiment set-up and a tally of ants that have left. */
+/* Layout: the intro, then the 900×600 arena as the hero, with a tally of the ants that have
+   left in its own card underneath. Beside them, from the top of the intro (below them on
+   narrower screens), a bench card holds the run controls and the experiment set-up. */
 :root {
   --bench: #e2e7e4;      /* page ground: a cool lab-bench grey */
   --card: #f6f8f7;       /* control card */
@@ -71,7 +72,7 @@ body {
 .app { max-width: 900px; margin-inline: auto; display: grid; gap: 20px; }
 @media (min-width: 1250px) { .app { max-width: 1214px; } }
 
-.masthead { display: grid; gap: 8px; }
+.masthead { grid-area: intro; display: grid; gap: 8px; }
 .masthead h1 {
   margin: 0;
   font-size: clamp(32px, 4.4vw, 46px);
@@ -82,10 +83,22 @@ body {
 }
 .masthead p { margin: 0; max-width: 62ch; font-size: 16px; color: var(--ink-2); }
 
-.layout { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
-@media (min-width: 1250px) { .layout { grid-template-columns: 900px minmax(0, 1fr); } }
+.layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "intro" "stage" "tally" "panel";
+  align-items: start;
+}
+@media (min-width: 1250px) {
+  .layout {
+    grid-template-columns: 900px minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas: "intro panel" "stage panel" "tally panel";
+  }
+}
 
-.stage { margin: 0; min-width: 0; }
+.stage { grid-area: stage; margin: 0; min-width: 0; }
 #arena {
   display: block;
   width: 100%;
@@ -100,6 +113,7 @@ body {
 
 /* ── control card ── */
 .panel {
+  grid-area: panel;
   display: grid;
   gap: 20px;
   align-content: start;
@@ -116,8 +130,7 @@ body {
       "run speed"
       "status status"
       "drops ants"
-      "fullness hopping"
-      "tally tally";
+      "fullness hopping";
     column-gap: 32px;
   }
   .run { grid-area: run; }
@@ -127,7 +140,6 @@ body {
   .ants-field { grid-area: ants; }
   .fullness-field { grid-area: fullness; }
   .hopping-field { grid-area: hopping; }
-  .tally { grid-area: tally; }
 }
 
 .run { display: flex; gap: 10px; align-items: center; }
@@ -259,7 +271,18 @@ input[type="range"]:focus-visible { outline-offset: 4px; border-radius: 4px; }
 .speed input:checked + span { background: var(--ink); color: var(--on-ink); }
 .speed input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 1px; }
 
-.tally { display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--line); }
+/* ── ants that have left ── */
+.tally {
+  grid-area: tally;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.tally-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
 .tally h2 {
   margin: 0;
   font: 500 11px/1.2 var(--mono);
@@ -268,7 +291,8 @@ input[type="range"]:focus-visible { outline-offset: 4px; border-radius: 4px; }
   color: var(--ink-2);
 }
 .tally p { margin: 0; font-size: 14px; color: var(--ink-2); }
-.swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.swatches { display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start; gap: 5px; }
+.swatches[hidden] { display: none; }
 .swatch {
   width: var(--s);
   height: var(--s);
@@ -289,15 +313,23 @@ input[type="range"]:focus-visible { outline-offset: 4px; border-radius: 4px; }
 </head>
 <body>
 <main class="app">
-  <header class="masthead">
-    <h1>Rainbow Ants</h1>
-    <p>Ants have see-through abdomens, so whatever they drink shows. Put out drops of coloured sugar water, choose how many ants come in, then press Go.</p>
-  </header>
-
   <div class="layout">
+    <header class="masthead">
+      <h1>Rainbow Ants</h1>
+      <p>Ants have see-through abdomens, so whatever they drink shows. Put out drops of coloured sugar water, choose how many ants come in, then press Go.</p>
+    </header>
+
     <figure class="stage">
       <canvas id="arena" width="900" height="600" role="img" aria-label="Top-down view of the arena: drops of coloured sugar water on white card, with an entrance door at the bottom and an exit door at the top."></canvas>
     </figure>
+
+    <section class="tally" aria-labelledby="tally-title">
+      <div class="tally-head">
+        <h2 id="tally-title">Ants that have left</h2>
+        <p id="tally-summary">Each ant that leaves shows up here in the colour it ended up.</p>
+      </div>
+      <div id="swatches" class="swatches" aria-hidden="true" hidden></div>
+    </section>
 
     <aside class="panel" aria-label="Experiment controls">
       <div class="run">
@@ -352,12 +384,6 @@ input[type="range"]:focus-visible { outline-offset: 4px; border-radius: 4px; }
           <label><input id="speed-4" type="radio" name="speed" value="4"><span>4×</span></label>
         </div>
       </div>
-
-      <section class="tally" aria-labelledby="tally-title">
-        <h2 id="tally-title">Ants that have left</h2>
-        <p id="tally-summary">Each ant that leaves shows up here in the colour it ended up.</p>
-        <div id="swatches" class="swatches" aria-hidden="true"></div>
-      </section>
     </aside>
   </div>
 
