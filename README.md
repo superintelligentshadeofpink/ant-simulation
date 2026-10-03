@@ -4,7 +4,7 @@ Ants have see-through abdomens, so whatever they drink shows. Rainbow Ants is a 
 
 **[Try it in your browser](https://superintelligentshadeofpink.github.io/ant-simulation/)**
 
-![120 ants mid-run around red, yellow, blue and green drops. Their swollen abdomens show the colours they've drunk, including mixes such as teal and purple, and the two drops nearest the entrance have shrunk to a fraction of their size.](docs/screenshot.jpg)
+![Rainbow Ants mid-run with 120 ants and four drops. On the left, ants with red, yellow, blue, green and mixed-colour abdomens crowd round the drops, the two drops nearest the entrance have shrunk to a fraction of their size, and a tally underneath shows the 50 ants that have left in the colours they ended up. The controls are on the right.](docs/screenshot.jpg)
 
 ## Running it
 
@@ -26,7 +26,7 @@ python3 -m http.server 8765
 | **Drop hopping** | The chance an ant moves on to another drop part-way through, which mixes the colours. |
 | **Speed** | ½× to 4×. |
 
-Press **Go** (or Space) to start, pause and resume. Each ant that leaves is added to the tally in the colour it ended up.
+Press **Go** (or Space) to start, pause and resume. Each ant that leaves is added to the tally under the simulation, in the colour it ended up.
 
 ## How it works
 
