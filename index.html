@@ -264,12 +264,16 @@ input[type="range"]:focus-visible { outline-offset: 4px; border-radius: 4px; }
 .chip:disabled { cursor: not-allowed; }
 .chip:disabled[aria-pressed="false"] { opacity: 0.5; }
 
-.speed { display: inline-flex; justify-self: start; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
-.speed label { position: relative; }
-.speed input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
-.speed span { display: block; padding: 8px 11px; border-radius: 6px; font: 500 13px/1 var(--mono); color: var(--ink-2); }
-.speed input:checked + span { background: var(--ink); color: var(--on-ink); }
-.speed input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 1px; }
+/* segmented choice: Speed, and First drop */
+.seg { display: inline-flex; justify-self: start; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
+.seg label { position: relative; }
+.seg input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.seg span { display: block; padding: 8px 11px; border-radius: 6px; font: 500 13px/1 var(--mono); color: var(--ink-2); }
+.seg input:checked + span { background: var(--ink); color: var(--on-ink); }
+.seg input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+.first-drop { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.sublabel { font-size: 14px; font-weight: 600; }
 
 /* ── ants that have left ── */
 .tally {
@@ -354,7 +358,14 @@ input[type="range"]:focus-visible { outline-offset: 4px; border-radius: 4px; }
           <button id="dye-blue" type="button" class="chip" data-dye="2" aria-pressed="false"><span class="dot"></span>Blue<span class="level"></span></button>
           <button id="dye-green" type="button" class="chip" data-dye="3" aria-pressed="false"><span class="dot"></span>Green<span class="level"></span></button>
         </div>
-        <p class="hint">Ants head for the nearest drop first. Drag a drop to move it.</p>
+        <div class="first-drop">
+          <span class="sublabel" id="first-label">First drop</span>
+          <div class="seg" role="radiogroup" aria-labelledby="first-label">
+            <label><input id="first-nearest" type="radio" name="first" value="nearest" checked><span>Nearest</span></label>
+            <label><input id="first-random" type="radio" name="first" value="random"><span>Random</span></label>
+          </div>
+        </div>
+        <p class="hint" id="drops-hint">Ants head for the nearest drop first. Drag a drop to move it.</p>
       </div>
 
       <div class="field ants-field">
@@ -377,7 +388,7 @@ input[type="range"]:focus-visible { outline-offset: 4px; border-radius: 4px; }
 
       <div class="field speed-field">
         <div class="field-head"><span class="label" id="speed-label">Speed</span></div>
-        <div class="speed" role="radiogroup" aria-labelledby="speed-label">
+        <div class="seg" role="radiogroup" aria-labelledby="speed-label">
           <label><input id="speed-half" type="radio" name="speed" value="0.5"><span>½×</span></label>
           <label><input id="speed-1" type="radio" name="speed" value="1" checked><span>1×</span></label>
           <label><input id="speed-2" type="radio" name="speed" value="2"><span>2×</span></label>

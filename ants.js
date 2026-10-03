@@ -20,6 +20,7 @@
   const DRINK_RATE = 0.13;   // share of a full crop drunk per second
   const MAX_APPETITE = 1.1;  // the greediest ants drink this much more than the Fullness setting
   const CLEARANCE = 40;      // berth walking ants give drops they aren't heading for
+  const REACHABLE = 1.2;     // how far round a drop (radians) an ant will walk to a free place
   const REACH = 14.6;        // thorax centre to mandible tip, in body units
 
   // Drop positions for one to four colours. Drops can be dragged before a run.
@@ -102,7 +103,7 @@
   const cropDepth = (fill) => 1.25 * Math.pow(fill, 0.55);
 
   // ── Simulation state ─────────────────────────────────────────────────────
-  const settings = { ants: 25, fullness: 0.75, hopping: 0.5, speed: 1, dyes: [true, false, false, false] };
+  const settings = { ants: 25, fullness: 0.75, hopping: 0.5, speed: 1, first: 'nearest', dyes: [true, false, false, false] };
   const sim = {
     state: 'setup',      // setup → running ⇄ paused → done
     drops: [],
@@ -184,7 +185,8 @@
   // ── Ants ─────────────────────────────────────────────────────────────────
   // States: enter (coming through the bottom door) → seek (walking to a place at a
   // drop's edge) → drink → seek another drop, or leave by the top door. An ant that
-  // finds no room at its drop waits nearby and tries again.
+  // finds no room on its side of a drop, gets crowded out, or sees its drop run dry goes
+  // to the nearest drop with room; if there's none, it waits nearby and tries again.
   class Ant {
     constructor(x, y) {
       this.x = x;
@@ -278,52 +280,100 @@
       const left = this.walk(this.goal.x, this.goal.y, dt, null, 1, 0.4);
       if (left < 12 || this.y < this.goal.y) {
         this.pause = rand(0.1, 0.45);
-        this.pickDrop(null, true);
+        this.pickDrop(null, settings.first === 'nearest');
       }
     }
 
-    // Choose a drop: the nearest one when `nearest` is set (on the way in), otherwise
-    // one at random, and a different one when moving on from `leaving`.
+    // Choose a drop: on the way in, the nearest one or one at random (the First drop
+    // setting); moving on part-way through, a random different one.
     pickDrop(leaving, nearest = false) {
       const wet = sim.drops.filter((d) => d.volume > 0);
       if (!wet.length) return this.exit();
       const pool = leaving && wet.length > 1 ? wet.filter((d) => d !== leaving) : wet;
       const need = this.target - this.fill;
-      this.drop = nearest ? this.closest(pool) : pool[(Math.random() * pool.length) | 0];
       this.quota = wet.length > 1 && Math.random() < settings.hopping ? Math.max(0.06, need * rand(0.3, 0.65)) : Infinity;
-      this.claim();
+      this.goTo(nearest ? this.closest(pool) : pool[(Math.random() * pool.length) | 0], leaving);
     }
+
+    // Head for a free place on this ant's side of `drop`. If that side is full, go to the
+    // nearest other drop with room (except `avoid`) rather than walk round anything;
+    // failing that, wait beside `drop` for a gap.
+    goTo(drop, avoid = null) {
+      const spot = this.placeAt(drop) || this.nearestPlace(drop, avoid);
+      if (spot) this.takePlace(spot);
+      else this.waitAt(drop);
+    }
+
+    // Pushed off `from` (crowded out, or it ran dry): go to the nearest drop with room.
+    relocate(from) {
+      if (this.isFull) return this.exit();
+      const wet = sim.drops.filter((d) => d.volume > 0);
+      if (!wet.length) return this.exit();
+      const spot = this.nearestPlace(from);
+      if (spot) this.takePlace(spot);
+      else this.waitAt(from && from.volume > 0 ? from : this.closest(wet));
+    }
+
+    // A free place at `drop` that this ant can reach without walking far round it:
+    // near the side it's facing, give or take, so the ring fills from all round.
+    placeAt(drop) {
+      const facing = Math.atan2(this.y - drop.y, this.x - drop.x);
+      const slot = findSlot(drop, facing + rand(-0.6, 0.6), this, 0.6) ?? findSlot(drop, facing, this, REACHABLE);
+      if (slot === null || !this.canWalkRound(drop, facing, slot)) return null;
+      return { drop, slot };
+    }
+
+    // Can this ant get round `drop` from angle `from` to angle `to` (walking just outside
+    // its ring of drinkers) without cutting through the crowd at another drop?
+    canWalkRound(drop, from, to) {
+      const sweep = turnTo(from, to);
+      if (Math.abs(sweep) <= 0.45) return true;   // close enough to walk straight there
+      const rr = drop.radius + CLEARANCE;
+      for (let s = 0.25; s <= 1; s += 0.25) {
+        const a = from + sweep * s;
+        if (dropNear(drop.x + Math.cos(a) * rr, drop.y + Math.sin(a) * rr, drop)) return false;
+      }
+      return true;
+    }
+
+    // The nearest free place at any drop not listed in `skip`.
+    nearestPlace(...skip) {
+      const others = sim.drops
+        .filter((d) => d.volume > 0 && !skip.includes(d))
+        .sort((a, b) => this.gapTo(a) - this.gapTo(b));
+      for (const d of others) {
+        const spot = this.placeAt(d);
+        if (spot) return spot;
+      }
+      return null;
+    }
+
+    takePlace(spot) {
+      this.drop = spot.drop;
+      this.slot = spot.slot;
+      this.state = 'seek';
+      this.near = 0;
+    }
+
+    waitAt(drop) {
+      this.drop = drop;
+      this.state = 'wait';
+      this.retry = rand(0.4, 1);
+      this.waitPoint = null;
+    }
+
+    gapTo(d) { return Math.hypot(d.x - this.x, d.y - this.y) - d.radius; }
 
     // The drop whose edge is nearest to this ant.
     closest(drops) {
-      let best = null, bestGap = Infinity;
-      for (const d of drops) {
-        const gap = Math.hypot(d.x - this.x, d.y - this.y) - d.radius;
-        if (gap < bestGap) {
-          bestGap = gap;
-          best = d;
-        }
-      }
+      let best = null;
+      for (const d of drops) if (!best || this.gapTo(d) < this.gapTo(best)) best = d;
       return best;
-    }
-
-    claim() {
-      const d = this.drop;
-      // aim for the near side of the drop, give or take, so the ring fills from all round
-      const slot = findSlot(d, Math.atan2(this.y - d.y, this.x - d.x) + rand(-0.8, 0.8), this);
-      if (slot === null) {
-        this.state = 'wait';
-        this.retry = rand(0.4, 1);
-        this.waitPoint = null;
-      } else {
-        this.slot = slot;
-        this.state = 'seek';
-      }
     }
 
     seek(dt) {
       const d = this.drop;
-      if (d.volume <= 0) return this.pickDrop(d);
+      if (d.volume <= 0) return this.relocate(d);
       if (this.isFull) return this.exit();
       const r = d.radius, at = r + this.reach - 1.5;
       const sx = d.x + Math.cos(this.slot) * at, sy = d.y + Math.sin(this.slot) * at;
@@ -331,10 +381,16 @@
       const ox = this.x - d.x, oy = this.y - d.y;
       const bearing = Math.atan2(oy, ox), off = turnTo(bearing, this.slot);
       if (Math.hypot(ox, oy) < r + 80 && Math.abs(off) > 0.45) {
-        // wrong side of the drop: work round outside the ring of drinkers
+        // its place is further round: work round outside the ring of drinkers. If another
+        // drop is in the way, drink there if it has room rather than walk round it.
         const a = bearing + Math.sign(off) * 0.55;
         tx = d.x + Math.cos(a) * (r + CLEARANCE);
         ty = d.y + Math.sin(a) * (r + CLEARANCE);
+        const blocker = dropNear(tx, ty, d);
+        if (blocker) {
+          const spot = this.placeAt(blocker);
+          return spot ? this.takePlace(spot) : this.waitAt(d);
+        }
       }
       this.walk(tx, ty, dt, d, 1, 0.7);
       // Arrived, or close enough for a moment while neighbours are in the way:
@@ -350,7 +406,7 @@
 
     drink(dt) {
       const d = this.drop;
-      if (d.volume <= 0) return this.moveOn();
+      if (d.volume <= 0) return this.moveOn(true);
       // stay at the edge as the drop shrinks and neighbours shuffle
       const at = d.radius + this.reach - 1.5;
       const tx = d.x + Math.cos(this.slot) * at, ty = d.y + Math.sin(this.slot) * at;
@@ -380,47 +436,57 @@
           d.ripples.push({ a: this.slot, age: 0 });
         }
       }
-      if (this.isFull || this.quota <= 1e-4) this.moveOn();
+      if (this.isFull || this.quota <= 1e-4) this.moveOn(false);
     }
 
-    moveOn() {
+    // Done at this drop: clean the antennae for a moment, then leave if full, otherwise
+    // carry on at another drop (a random one by choice, the nearest with room if it ran dry).
+    moveOn(ranDry) {
       const from = this.drop;
-      this.pause = rand(0.4, 1);   // a moment to clean the antennae
+      this.pause = rand(0.4, 1);
       if (this.isFull) return this.exit();
-      this.pickDrop(from);
+      if (ranDry) this.relocate(from);
+      else this.pickDrop(from);
     }
 
     // Squeezed out of a crowded drop.
     bumped() {
       if (this.fill >= 0.8 * this.target) return this.exit();
-      this.pickDrop(this.drop);
+      this.relocate(this.drop);
     }
 
     wait(dt) {
       const d = this.drop;
-      if (d.volume <= 0) return this.pickDrop(d);
+      if (d.volume <= 0) return this.relocate(d);
       if (this.isFull) return this.exit();
       if ((this.retry -= dt) <= 0) {
         this.retry = rand(0.5, 1.2);
-        const slot = findSlot(d, Math.atan2(this.y - d.y, this.x - d.x), this);
-        if (slot !== null) {
-          this.slot = slot;
-          this.state = 'seek';
-          return;
-        }
-        if (Math.random() < 0.3 && sim.drops.some((o) => o !== d && o.volume > 0)) return this.pickDrop(d);
+        const spot = this.placeAt(d) || this.nearestPlace(d);
+        if (spot) return this.takePlace(spot);
       }
-      // drift round the drop just outside the crowd, looking for a gap
+      // drift round the drop just outside the crowd, looking for a gap, and turn back
+      // rather than walk round a neighbouring drop
       const wp = this.waitPoint;
       if (!wp || Math.hypot(wp.x - this.x, wp.y - this.y) < 6) {
-        const a = Math.atan2(this.y - d.y, this.x - d.x) + this.circling * rand(0.15, 0.55);
-        const rr = d.radius + rand(44, 62);
-        this.waitPoint = {
-          x: clamp(d.x + Math.cos(a) * rr, WALL + 20, W - WALL - 20),
-          y: clamp(d.y + Math.sin(a) * rr, WALL + 20, H - WALL - 20),
-        };
+        const bearing = Math.atan2(this.y - d.y, this.x - d.x);
+        let next = this.driftPoint(d, bearing);
+        if (dropNear(next.x, next.y, d)) {
+          this.circling = -this.circling;
+          next = this.driftPoint(d, bearing);
+          if (dropNear(next.x, next.y, d)) next = { x: this.x, y: this.y };   // hemmed in
+        }
+        this.waitPoint = next;
       }
       this.walk(this.waitPoint.x, this.waitPoint.y, dt, d, 0.45, 1);
+    }
+
+    driftPoint(d, bearing) {
+      const a = bearing + this.circling * rand(0.15, 0.55);
+      const rr = d.radius + rand(44, 62);
+      return {
+        x: clamp(d.x + Math.cos(a) * rr, WALL + 20, W - WALL - 20),
+        y: clamp(d.y + Math.sin(a) * rr, WALL + 20, H - WALL - 20),
+      };
     }
 
     exit() {
@@ -511,14 +577,25 @@
     return Math.max(heads, bellies);
   }
 
-  // A free place on the drop's edge, as close as possible to the angle `prefer`.
-  function findSlot(drop, prefer, self) {
+  // A free place on the drop's edge, as close as possible to the angle `prefer` and no
+  // more than `reach` radians either side of it.
+  function findSlot(drop, prefer, self, reach = Math.PI) {
     const r = drop.radius;
     if (r < 5) return null;
     const others = sim.ants.filter((a) => a !== self && a.drop === drop && (a.state === 'drink' || a.state === 'seek'));
     for (let k = 0; k < 80; k++) {
-      const ang = prefer + (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.08;
+      const off = Math.ceil(k / 2) * 0.08;
+      if (off > reach) break;
+      const ang = prefer + (k & 1 ? 1 : -1) * off;
       if (others.every((o) => Math.abs(turnTo(o.slot, ang)) >= slotGap(r, self, o))) return ang;
+    }
+    return null;
+  }
+
+  // The drop (other than `except`) whose crowd covers the point (x, y), if any.
+  function dropNear(x, y, except) {
+    for (const d of sim.drops) {
+      if (d !== except && d.volume > 0 && Math.hypot(x - d.x, y - d.y) < d.radius + CLEARANCE) return d;
     }
     return null;
   }
@@ -1217,6 +1294,8 @@
     hopping: $('hopping'),
     hoppingOut: $('hopping-out'),
     chips: [...document.querySelectorAll('.chip')],
+    firsts: [...document.querySelectorAll('input[name="first"]')],
+    dropsHint: $('drops-hint'),
     speeds: [...document.querySelectorAll('input[name="speed"]')],
     summary: $('tally-summary'),
     swatches: $('swatches'),
@@ -1229,6 +1308,11 @@
     settings.hopping = ui.hopping.value / 100;
     const speed = ui.speeds.find((r) => r.checked);
     settings.speed = speed ? +speed.value : 1;
+    const first = ui.firsts.find((r) => r.checked);
+    settings.first = first ? first.value : 'nearest';
+    ui.dropsHint.textContent = settings.first === 'nearest'
+      ? 'Ants head for the nearest drop first. Drag a drop to move it.'
+      : 'Ants head for a drop at random. Drag a drop to move it.';
     ui.antsOut.textContent = settings.ants;
     ui.fullnessOut.textContent = ui.fullness.value + '%';
     ui.hoppingOut.textContent = ui.hopping.value + '%';
@@ -1390,6 +1474,7 @@
   });
   ui.hopping.addEventListener('input', readControls);
   for (const r of ui.speeds) r.addEventListener('change', readControls);
+  for (const r of ui.firsts) r.addEventListener('change', readControls);
   for (const chip of ui.chips) {
     chip.addEventListener('click', () => {
       if (sim.state === 'running' || sim.state === 'paused') return;
